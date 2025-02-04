@@ -1,13 +1,66 @@
 ﻿using ACE.Database;
 using ACE.Entity.Models;
-using ACE.Mods.Legend.Lib.Auction.Models;
+using ACE.Mods.Legend.Lib.Auction.Network.Models;
+using ACE.Mods.Legend.Lib.Common;
 using ACE.Mods.Legend.Lib.Common.Errors;
+using ACE.Mods.Legend.Lib.Database;
 using ACE.Mods.Legend.Lib.Database.Models;
 using ACE.Server.Network.Enum;
 using ACE.Server.Network.GameMessages;
 
 namespace ACE.Mods.Legend.Lib.Auction.Network;
 
+public static class GameMessageCollectInboxItemsRequest
+{
+    [GameMessage((GameMessageOpcode)AuctionGameMessageOpcode.CollectInboxItemsRequest, SessionState.WorldConnected)]
+    public static void Handle(ClientMessage clientMessage, Session session)
+    {
+        try
+        {
+            session.Player.CollectAuctionInboxItems();
+            var successResponse = new JsonResponse<object>(data: null);
+            session.Network.EnqueueSend(new GameMessageCollectInboxItemResponse(successResponse));
+        }
+        catch (AuctionFailure ex)
+        {
+            ModManager.Log(ex.ToString(), ModManager.LogLevel.Error);
+            var failureResponse = new JsonResponse<object>(data: null, success: false, errorCode: (int)ex.Code, ex.Message);
+            session.Network.EnqueueSend(new GameMessageCollectInboxItemResponse(failureResponse));
+        }
+        catch (Exception ex)
+        {
+            ModManager.Log(ex.ToString(), ModManager.LogLevel.Error);
+            var failureResponse = new JsonResponse<object>(data: null, success: false, errorCode: (int)FailureCode.Auction.Unknown, "Internal Server Error!");
+            session.Network.EnqueueSend(new GameMessageCollectInboxItemResponse(failureResponse));
+        }
+    }
+}
+
+public static class GameMessageGetInboxItemsRequest
+{ 
+    [GameMessage((GameMessageOpcode)AuctionGameMessageOpcode.GetInboxItemsRequest, SessionState.WorldConnected)]
+    public static void Handle(ClientMessage clientMessage, Session session)
+    {
+        try
+        {
+            var inboxItems = DatabaseManager.Shard.BaseDatabase.GetMailItems(session.AccountId, MailStatus.pending);
+            var successResponse = new JsonResponse<List<MailItem>>(data: inboxItems);
+            session.Network.EnqueueSend(new GameMessageGetInboxItemsResponse(successResponse));
+        }
+        catch (AuctionFailure ex)
+        {
+            ModManager.Log(ex.ToString(), ModManager.LogLevel.Error);
+            var failureResponse = new JsonResponse<List<MailItem>>(data: null, success: false, errorCode: (int)ex.Code, ex.Message);
+            session.Network.EnqueueSend(new GameMessageGetInboxItemsResponse(failureResponse));
+        }
+        catch (Exception ex)
+        {
+            ModManager.Log(ex.ToString(), ModManager.LogLevel.Error);
+            var failureResponse = new JsonResponse<List<MailItem>>(data: null, success: false, errorCode: (int)FailureCode.Auction.Unknown, "Internal Server Error!");
+            session.Network.EnqueueSend(new GameMessageGetInboxItemsResponse(failureResponse));
+        }
+    }
+}
 
 public static class GameMessageCreateSellOrderRequest
 {
@@ -17,7 +70,6 @@ public static class GameMessageCreateSellOrderRequest
     {
         try
         {
-            var opcode = clientMessage.Opcode;
             var request = clientMessage.ReadJson<CreateSellOrderRequest>();
 
             if (request == null || request.Data == null)
@@ -32,14 +84,14 @@ public static class GameMessageCreateSellOrderRequest
         catch (AuctionFailure ex)
         {
             ModManager.Log(ex.ToString(), ModManager.LogLevel.Error);
-            var response = new JsonResponse<AuctionSellOrder>(data: null, success: false, errorCode: (int)ex.Code, ex.Message);
-            session.Network.EnqueueSend(new GameMessageCreateSellOrderResponse(response));
+            var failureResponse = new JsonResponse<AuctionSellOrder>(data: null, success: false, errorCode: (int)ex.Code, ex.Message);
+            session.Network.EnqueueSend(new GameMessageCreateSellOrderResponse(failureResponse));
         }
         catch (Exception ex)
         {
             ModManager.Log(ex.ToString(), ModManager.LogLevel.Error);
-            var response = new JsonResponse<AuctionSellOrder>(data: null, success: false, errorCode: (int)FailureCode.Auction.Unknown, "Internal Server Error!");
-            session.Network.EnqueueSend(new GameMessageCreateSellOrderResponse(response));
+            var failureResponse = new JsonResponse<AuctionSellOrder>(data: null, success: false, errorCode: (int)FailureCode.Auction.Unknown, "Internal Server Error!");
+            session.Network.EnqueueSend(new GameMessageCreateSellOrderResponse(failureResponse));
         }
     }
 }
@@ -62,20 +114,20 @@ public static class GameMessageGetPostListingsRequest
 
             List<AuctionListing> listings = session.Player.GetPostAuctionListings(request.Data);
 
-            var response = new JsonResponse<List<AuctionListing>>(data: listings);
-            session.Network.EnqueueSend(new GameMessageGetPostListingsResponse(response));
+            var failureResponse = new JsonResponse<List<AuctionListing>>(data: listings);
+            session.Network.EnqueueSend(new GameMessageGetPostListingsResponse(failureResponse));
         }
         catch (AuctionFailure ex)
         {
             ModManager.Log(ex.ToString(), ModManager.LogLevel.Error);
-            var response = new JsonResponse<List<AuctionListing>>(data: null, success: false, errorCode: (int)ex.Code, ex.Message);
-            session.Network.EnqueueSend(new GameMessageGetPostListingsResponse(response));
+            var failureResponse = new JsonResponse<List<AuctionListing>>(data: null, success: false, errorCode: (int)ex.Code, ex.Message);
+            session.Network.EnqueueSend(new GameMessageGetPostListingsResponse(failureResponse));
         }
         catch (Exception ex)
         {
             ModManager.Log(ex.ToString(), ModManager.LogLevel.Error);
-            var response = new JsonResponse<List<AuctionListing>>(data: null, success: false, errorCode: (int)FailureCode.Auction.Unknown, "Internal Server Error!");
-            session.Network.EnqueueSend(new GameMessageGetPostListingsResponse(response));
+            var failureResponse = new JsonResponse<List<AuctionListing>>(data: null, success: false, errorCode: (int)FailureCode.Auction.Unknown, "Internal Server Error!");
+            session.Network.EnqueueSend(new GameMessageGetPostListingsResponse(failureResponse));
         }
     }
 }

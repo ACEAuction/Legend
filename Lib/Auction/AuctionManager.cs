@@ -55,6 +55,8 @@ public static class AuctionManager
         }
     }
 
+
+
     private static AuctionListing? ProcessExpiredListing(uint listingId)
     {
         return DatabaseManager.Shard.BaseDatabase.ExecuteInTransaction(
@@ -70,7 +72,14 @@ public static class AuctionManager
 
                 if (highestBidderId == 0)
                 {
-                    DatabaseManager.Shard.BaseDatabase.SendMailItem(dbContext, sellerId, expiredListing.ItemId, "Auction House");
+                    var subject = $"Sell order expired: {expiredListing.ItemName}";
+                    DatabaseManager.Shard.BaseDatabase.SendMailItem(dbContext, sellerId, expiredListing.ItemId, expiredListing.ItemIconId, "Auction House", subject);
+
+                    var onlinePlayer = PlayerManager.GetAllOnline()
+                        .Where(player => player.Account.AccountId == sellerId).FirstOrDefault();
+
+                    if (onlinePlayer != null)
+                        onlinePlayer.SendMailNotification();
                 }
                 else
                 {

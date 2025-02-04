@@ -95,6 +95,10 @@ public partial class MailItem
     public string From { get; set; }
     public uint ItemId { get; set; }
     public uint ReceiverId { get; set; }
+    public string Subject { get; set; } = "";
+    public uint IconId { get; set; }
+    public DateTime CreatedTime { get; set; }
+
 
     public MailStatus Status { get; set; }
 }

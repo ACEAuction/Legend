@@ -10,6 +10,9 @@ using ACE.Mods.Legend.Lib.Database.Models;
 
 using ACE.Entity;
 using ACE.Mods.Legend.Lib.Common.Spells;
+using ACE.Mods.Legend.Lib.Auction.Network.Models;
+using ACE.Mods.Legend.Lib.Auction.Network;
+using ACE.Server.Factories;
 
 
 namespace ACE.Mods.Legend.Lib.Auction;
@@ -25,6 +28,49 @@ public static class AuctionExtensions
     public static void SendAuctionMessage(this Player player, string message, ChatMessageType messageType = ChatMessageType.System)
     {
         player.Session.Network.EnqueueSend(new GameMessageSystemChat($"{AuctionPrefix} {message}", messageType));
+    }
+
+    /// <summary>
+    /// This is called when a mail item is sent, to trigger the client to fetch updates list of mail items
+    /// </summary>
+    /// <param name="player"></param>
+    public static void SendMailNotification(this Player player)
+    {
+        var response = new JsonResponse<object>(data: null, success: true);
+        player.Session.Network.EnqueueSend(new GameMessageInboxNotificationResponse(response));
+    }
+
+    /// <summary>
+    /// Collect mail items and send them to a players inventory
+    /// </summary>
+    /// <param name="player"></param>
+    /// <exception cref="AuctionFailure"></exception>
+    public static void CollectAuctionInboxItems(this Player player)
+    {
+        var inboxItems = DatabaseManager.Shard.BaseDatabase.GetMailItems(player.Session.AccountId, MailStatus.pending);
+
+        foreach (var item in inboxItems)
+        {
+            var biota = DatabaseManager.Shard.BaseDatabase.GetBiota(item.ItemId);
+
+            lock (player.BiotaDatabaseLock)
+            {
+                if (biota == null)
+                    continue;
+                //throw new AuctionFailure($"Inbox collection failure, Could not find item with Id = {item.ItemId}", FailureCode.Auction.Unknown);
+
+                if (player.Inventory.ContainsKey(new ObjectGuid(item.ItemId)))
+                    continue;
+                    //throw new AuctionFailure($"Inbox collection failure, {player.Name} already has item with Id = {item.ItemId} in their inventory", FailureCode.Auction.Unknown);
+
+                var wo = WorldObjectFactory.CreateWorldObject(biota);
+
+                if (player.TryCreateInInventoryWithNetworking(wo))
+                    DatabaseManager.Shard.BaseDatabase.RemoveMailItem(item.Id);
+                else
+                    throw new AuctionFailure($"Failed to add mail item with Id = {item.Id} to {player.Name}'s inventory", FailureCode.Auction.Unknown);
+            }
+        }
     }
 
     public static List<AuctionListing> GetPostAuctionListings(this Player player, GetPostListingsRequest request)
@@ -108,7 +154,6 @@ public static class AuctionExtensions
             HandleCreateSellOrderFailure(player, sellContext, ex.Message);
             throw;
         }
-
     }
 
     private static void ProcessSell(Player player, CreateSellOrderContext sellContext, AuctionDbContext dbContext)
@@ -142,7 +187,9 @@ public static class AuctionExtensions
     {
         foreach (var removedItem in sellContext.RemovedItems)
         {
-            DatabaseManager.Shard.BaseDatabase.SendMailItem(sellContext.CreateSellOrder.Seller.Account.AccountId, removedItem.Guid.Full, "Auction House");
+            var subject = $"Create sell order failed: {removedItem.NameWithMaterial}";
+            DatabaseManager.Shard.BaseDatabase.SendMailItem(sellContext.CreateSellOrder.Seller.Account.AccountId, removedItem.Guid.Full, removedItem.IconId, "Auction House", subject);
+            player.SendMailNotification();
         }
     }
 
@@ -172,6 +219,8 @@ public static class AuctionExtensions
 
         if (!player.RemoveItemForGive(item, itemFoundInContainer, itemWasEquipped, itemRootOwner, removeAmount, out WorldObject itemToGive))
             throw new AuctionFailure($"The item cannot be transferred {item.NameWithMaterial}, failed to remove item from location", FailureCode.Auction.TransferItemFailure);
+
+        itemToGive.SaveBiotaToDatabase();
 
         itemToRemove = itemToGive;
     }

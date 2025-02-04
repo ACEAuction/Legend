@@ -273,10 +273,24 @@ namespace ACE.Mods.Legend.Lib.Auction
                       .IsRequired();
 
                 entity.Property(e => e.From)
-                      .HasColumnName("from");
+                      .HasColumnName("from")
+                      .IsRequired();
+
+                entity.Property(e => e.Subject)
+                      .HasColumnName("subject")
+                      .IsRequired();
+                      
 
                 entity.Property(e => e.ReceiverId)
                       .HasColumnName("receiver_id")
+                      .IsRequired();
+
+                entity.Property(e => e.CreatedTime)
+                      .HasColumnName("created_time")
+                      .IsRequired();
+
+                entity.Property(e => e.IconId)
+                      .HasColumnName("icon_id")
                       .IsRequired();
 
                 entity.Property(e => e.Status)
